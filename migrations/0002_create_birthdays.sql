@@ -1,0 +1,7 @@
+CREATE TABLE birthdays (
+    snowflake TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    day INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+    month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
