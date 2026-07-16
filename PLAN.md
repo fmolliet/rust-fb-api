@@ -45,6 +45,14 @@ Conexão DB via `DATABASE_URL` (env var).
 * [x] App entrypoint (src/main.rs) — tracing, pool, health check, axum::serve on 0.0.0.0:8080
 * [x] Dockerized app starts and responds: `GET /health` → `{"status":"ok"}`
 * [x] Fixed pg_hba.conf SSL/password auth issue (scram-sha-256 → trust)
+* [x] Routes module (src/routes/mod.rs)
+* [x] Registration handlers (POST, GET open, GET id, PATCH finish, DELETE)
+* [x] Birthday handlers (CRUD, today, month)
+* [x] Wire up routes in main.rs
+* [x] Fix SQLx type mismatches (u8→i16 for Postgres integers)
+* [x] Fix AppState.pool extraction in route handlers
+* [x] Dockerfile (multi-stage build)
+* [x] .dockerignore
 
 ⸻
 
@@ -53,13 +61,14 @@ Conexão DB via `DATABASE_URL` (env var).
 ```
 fbrustapi/
 ├── Cargo.toml                    # ✅
-├── Dockerfile                    # ⏳
-├── .dockerignore                 # ⏳
+├── Dockerfile                    # ✅
+├── .dockerignore                 # ✅
 ├── src/
-│   ├── main.rs                   # ⏳
-│   ├── config.rs                 # ⏳
-│   ├── db.rs                     # ⏳
+│   ├── main.rs                   # ✅
+│   ├── config.rs                 # ✅
+│   ├── db.rs                     # ✅
 │   ├── error.rs                  # ✅
+│   ├── lib.rs                    # ✅
 │   ├── models/
 │   │   ├── register.rs           # ✅
 │   │   └── birthday.rs           # ✅  (timezone GMT-3)
@@ -67,9 +76,12 @@ fbrustapi/
 │   │   ├── register.rs           # ✅
 │   │   └── birthday.rs           # ✅
 │   ├── routes/
-│   │   ├── register.rs           # ⏳
-│   │   └── birthday.rs           # ⏳
+│   │   ├── mod.rs                # ✅
+│   │   ├── register.rs           # ✅
+│   │   └── birthday.rs           # ✅
 │   └── error.rs                  # ✅
+├── Dockerfile                    # ✅
+├── .dockerignore                 # ✅
 └── migrations/
     ├── 0001_create_registrations.sql  # ✅
     └── 0002_create_birthdays.sql      # ✅
@@ -293,8 +305,9 @@ docker buildx build --platform linux/arm64,linux/amd64 -t fbrustapi:latest .
 9. [x] `src/db.rs` — PgPool, connect, health
 10. [x] `src/main.rs` — router, tracing, PgPool, server
 11. [x] Dockerized app starts and responds
-12. [ ] `src/routes/register.rs` — handlers registration (POST, GET open, GET id, PATCH finish, DELETE)
-13. [ ] `src/routes/birthday.rs` — handlers birthday (CRUD, today, month)
-14. [ ] Wire up routes in `main.rs` (extend router)
-15. [ ] `Dockerfile` + `.dockerignore`
-16. [ ] Build docker multi-arch
+12. [x] `src/routes/register.rs` — handlers registration (POST, GET open, GET id, PATCH finish, DELETE)
+13. [x] `src/routes/birthday.rs` — handlers birthday (CRUD, today, month)
+14. [x] Wire up routes in `main.rs` (extend router)
+15. [x] `Dockerfile` + `.dockerignore`
+16. [x] Build docker multi-arch
+17. [ ] Integration tests

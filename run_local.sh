@@ -6,7 +6,7 @@ DB_PORT=5432
 DB_USER="postgres"
 DB_PASSWORD="postgres"
 DB_NAME="fbrustapi"
-APP_PORT=8080
+APP_PORT="${PORT:-8081}"
 DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}"
 
 # Color codes for pretty printing
@@ -161,6 +161,7 @@ run_tests() {
     run_migrations
 
     log_info "Running Rust unit and integration tests..."
+    export DATABASE_URL
     if ! cargo test; then
         log_error "Some Rust unit/integration tests failed! Aborting."
         exit 1

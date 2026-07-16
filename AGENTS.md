@@ -1,39 +1,65 @@
-# fbrustapi - Agent Instructions
+# CLAUDE.md
 
-Single-crate Rust REST API: Axum 0.8 + SQLx 0.8 + PostgreSQL.
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-## Commands
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
 ```
-DATABASE_URL=... cargo run          # start server on 0.0.0.0:8080
-DATABASE_URL=... cargo test         # unit + integration tests
-./run_local.sh dev                  # start DB (Docker/Colima) + migrations + server
-./run_local.sh test                 # full stack: DB + migrations + cargo test + API health check
-./run_local.sh reset                # drop+recreate public schema + reapply migrations
-./run_local.sh clean                # remove fbrustapi-db container
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
 ```
 
-DB container: `fbrustapi-db`, port 5432, user `postgres`, password `postgres`, db `fbrustapi`.
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-## Architecture
-- `src/main.rs` — entrypoint. Creates PgPool, runs health check, mounts only `/health`. **Routes module (`src/routes/`) is empty** — not yet wired up. This is the only thing that prevents `/registration` and `/birthday` endpoints.
-- `src/lib.rs` — declares modules: `config`, `db`, `error`, `models`, `dto`. Routes module is NOT declared yet.
-- `src/config.rs` — reads `DATABASE_URL` env var. Exits on missing.
-- `src/db.rs` — `PgPool` creation + health check query.
-- `src/error.rs` — `AppError` enum (`NotFound`, `Conflict`, `BadRequest`, `Database`, `Internal`). Implements `IntoResponse` for Axum.
-- `src/models/register.rs` — `Register` + `RegisterResponse` structs (no query methods yet).
-- `src/models/birthday.rs` — `Birthday` + `BirthdayResponse` structs. GMT-3 timezone helper `today_day_month()`.
-- `src/dto/register.rs` + `src/dto/birthday.rs` — serde `Deserialize` structs for request bodies.
-- `migrations/` — raw SQL files piped to `psql` by `run_local.sh` (not sqlx migration tool).
+---
 
-## Key constraints
-- `DATABASE_URL` is required at startup — no default, no `.env` file loading.
-- Birthday dates use GMT-3 (`FixedOffset::west_opt(3 * 3600)`) for "today"/"month" endpoints.
-- `registrations` table has partial unique index `uq_open_registration` on `(applicant_id) WHERE finished = FALSE` — prevents concurrent open registrations.
-- `birthdays` table: `snowflake` is PK. `day` CHECK 1-31, `month` CHECK 1-12.
-- SQLx features include both `postgres` AND `sqlite` — sqlite used for compile-time query validation but target DB is postgres only.
-- Routes are planned but **not implemented**. `src/routes/` directory exists but is empty. Check `PLAN.md` for endpoint specs.
-
-## Documentation
-- `PLAN.md` — roadmap with task tracking (`[x]`/`[/]`/`[ ]`), endpoint contracts, DTOs, query API signatures. Keep updated.
-- `okf/` — knowledge base with YAML frontmatter. Update `okf/index.md` when adding entries.
-- `README.md` — tech stack, DB schema, API endpoints.
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

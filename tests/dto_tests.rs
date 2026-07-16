@@ -1,16 +1,15 @@
 use fbrustapi::dto::register::{CreateRegisterDto, UpdateRegisterDto};
 use fbrustapi::dto::birthday::BirthdayRequestDto;
 use validator::Validate;
-use chrono::NaiveDate;
 
 #[test]
 fn test_create_register_dto_valid() {
     let dto = CreateRegisterDto {
         applicant_id: "123".to_string(),
-        birthday: NaiveDate::from_ymd_opt(2000, 1, 1).unwrap(),
-        specie: "Human".to_string(),
-        source: "Discord".to_string(),
-        message_id: "987654321".to_string(),
+        birthday: Some("2000-01-01".to_string()),
+        specie: Some("Human".to_string()),
+        source: Some("Discord".to_string()),
+        message_id: Some("987654321".to_string()),
     };
     assert!(dto.validate().is_ok());
 }
@@ -19,10 +18,10 @@ fn test_create_register_dto_valid() {
 fn test_create_register_dto_invalid_empty_fields() {
     let dto = CreateRegisterDto {
         applicant_id: "".to_string(), // Invalid: empty
-        birthday: NaiveDate::from_ymd_opt(2000, 1, 1).unwrap(),
-        specie: "".to_string(), // Invalid: empty
-        source: "Discord".to_string(),
-        message_id: "".to_string(), // Invalid: empty
+        birthday: Some("2000-01-01".to_string()),
+        specie: Some("".to_string()), // Invalid: empty
+        source: Some("Discord".to_string()),
+        message_id: Some("".to_string()), // Invalid: empty
     };
     let res = dto.validate();
     assert!(res.is_err());

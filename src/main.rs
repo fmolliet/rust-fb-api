@@ -1,6 +1,5 @@
-use fbrustapi::{config, db};
-use axum::routing::get;
-use axum::Router;
+use fbrustapi::{config, db, routes};
+use axum::{routing::get, Router};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -19,10 +18,16 @@ async fn main() {
     db::health_check(&pool).await;
     tracing::info!("Health check passed");
 
-    let app = Router::new()
-        .route("/health", get(health));
+    let state = db::AppState { pool };
 
-    let addr = "0.0.0.0:8080";
+    let app = Router::new()
+        .route("/health", get(health))
+        .nest("/registration", routes::register::register_routes())
+        .nest("/birthday", routes::birthday::birthday_routes())
+        .with_state(state);
+
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8081".to_string());
+    let addr = format!("0.0.0.0:{}", port);
     tracing::info!("Listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

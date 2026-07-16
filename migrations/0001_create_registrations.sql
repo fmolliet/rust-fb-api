@@ -1,17 +1,15 @@
 CREATE TABLE registrations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    applicant_id TEXT NOT NULL,
-    curator_id TEXT,
-    birthday TEXT,
-    specie TEXT,
-    source TEXT,
-    message_id TEXT,
-    finished BOOLEAN DEFAULT FALSE,
-    approved BOOLEAN,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    applicantid VARCHAR(255) NOT NULL,
+    curatorid VARCHAR(255) NULL,
+    finished BOOL NULL DEFAULT false,
+    messageid VARCHAR(255) NULL,
+    birthday VARCHAR(255) NULL,
+    specie VARCHAR(255) NULL,
+    source VARCHAR(255) NULL,
+    createdat TIMESTAMP NOT NULL DEFAULT current_timestamp,
+    updatedat TIMESTAMP NOT NULL DEFAULT current_timestamp,
+    approved BOOL NULL,
+    CONSTRAINT registrations_pkey PRIMARY KEY (id),
+    INDEX idx_applicantid (applicantid)
 );
-
-CREATE UNIQUE INDEX uq_open_registration ON registrations(applicant_id) WHERE finished = FALSE;
-CREATE INDEX idx_reg_applicant ON registrations(applicant_id);
-CREATE INDEX idx_reg_finished ON registrations(finished);

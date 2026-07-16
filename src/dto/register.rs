@@ -5,13 +5,13 @@ use validator::Validate;
 pub struct CreateRegisterDto {
     #[validate(length(min = 1))]
     pub applicant_id: String,
-    pub birthday: chrono::NaiveDate,
+    pub birthday: Option<String>,
     #[validate(length(min = 1))]
-    pub specie: String,
+    pub specie: Option<String>,
     #[validate(length(min = 1))]
-    pub source: String,
+    pub source: Option<String>,
     #[validate(length(min = 1))]
-    pub message_id: String,
+    pub message_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]

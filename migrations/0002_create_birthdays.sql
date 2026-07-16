@@ -1,7 +1,8 @@
 CREATE TABLE birthdays (
-    snowflake TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    day INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
-    month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    day INT4 NOT NULL,
+    month INT4 NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    snowflake VARCHAR(255) NOT NULL,
+    CONSTRAINT birthdays_pk PRIMARY KEY (snowflake),
+    UNIQUE INDEX snowflake_un (snowflake)
 );

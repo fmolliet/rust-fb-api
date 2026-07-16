@@ -11,9 +11,13 @@ validator = { version = "0.20", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1", features = ["v7", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v7", "v4", "serde"] }
+chrono = { version = "0.4", features = ["serde", "std"] }
 thiserror = "2"
 tower-http = { version = "0.6", features = ["trace"] }
 anyhow = "1"
 sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "sqlite", "uuid", "chrono", "time", "rust_decimal", "macros"] }
+
+[dev-dependencies]
+tower = "0.5"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
