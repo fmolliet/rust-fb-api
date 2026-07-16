@@ -1,3 +1,5 @@
 /target
 /.agents
 /.claude
+*.db
+.env.local

@@ -24,6 +24,8 @@ async fn main() {
         .route("/health", get(health))
         .nest("/registration", routes::register::register_routes())
         .nest("/birthday", routes::birthday::birthday_routes())
+        .nest("/meeting", routes::meeting::meeting_routes())
+        .nest("/announce", routes::announce::announce_routes())
         .with_state(state);
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8081".to_string());

@@ -2,12 +2,17 @@ use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{extract::State, Json};
-use uuid::Uuid;
 
 use crate::db::AppState;
 use crate::dto::register::{CreateRegisterDto, UpdateRegisterDto};
 use crate::error::AppError;
 use crate::models::register::Register;
+
+fn parse_uuid_id(id: &str) -> Result<String, AppError> {
+    uuid::Uuid::parse_str(id).map(|_| id.to_string()).map_err(|_| {
+        AppError::BadRequest(format!("Invalid UUID format: {}", id))
+    })
+}
 
 pub fn register_routes() -> axum::Router<AppState> {
     axum::Router::new()
@@ -70,11 +75,9 @@ async fn get_registration(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::parse_str(&id).map_err(|_| {
-        AppError::BadRequest(format!("Invalid UUID format: {}", id))
-    })?;
+    let id = parse_uuid_id(&id)?;
 
-    let reg = Register::find_by_id(&state.pool, uuid)
+    let reg = Register::find_by_id(&state.pool, &id)
         .await
         .map_err(|e| {
             tracing::error!("DB error finding registration: {}", e);
@@ -116,11 +119,9 @@ async fn delete_registration(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::parse_str(&id).map_err(|_| {
-        AppError::BadRequest(format!("Invalid UUID format: {}", id))
-    })?;
+    let id = parse_uuid_id(&id)?;
 
-    let deleted = Register::delete_by_id(&state.pool, uuid)
+    let deleted = Register::delete_by_id(&state.pool, &id)
         .await
         .map_err(|e| {
             tracing::error!("DB error deleting registration: {}", e);

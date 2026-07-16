@@ -1,8 +1,8 @@
 use chrono::{Datelike, TimeZone};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use sqlx::PgPool;
 
+use crate::db::PgPool;
 use crate::dto::birthday::BirthdayRequestDto;
 
 const TZ: chrono::FixedOffset = chrono::FixedOffset::west_opt(3 * 3600).unwrap();

@@ -16,7 +16,7 @@ chrono = { version = "0.4", features = ["serde", "std"] }
 thiserror = "2"
 tower-http = { version = "0.6", features = ["trace"] }
 anyhow = "1"
-sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "sqlite", "uuid", "chrono", "time", "rust_decimal", "macros"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "uuid", "chrono", "time", "rust_decimal", "macros"] }
 
 [dev-dependencies]
 tower = "0.5"

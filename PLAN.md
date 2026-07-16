@@ -13,6 +13,8 @@ Recriar endpoints Java (RESTEasy/Quarkus) em Rust com PostgreSQL.
 
 * `/registration` — gerenciar processos de registro/apovação de usuários
 * `/birthday` — gerenciar aniversários (snowflake = ID Discord)
+* `/meeting` — gerenciar reuniões (CRUD completo, snowflake, soft delete, paginação)
+* `/announce` — gerenciar mensagens de anúncio para servidor Discord
 
 Conexão DB via `DATABASE_URL` (env var).
 
@@ -71,14 +73,17 @@ fbrustapi/
 │   ├── lib.rs                    # ✅
 │   ├── models/
 │   │   ├── register.rs           # ✅
-│   │   └── birthday.rs           # ✅  (timezone GMT-3)
+│   │   ├── birthday.rs           # ✅  (timezone GMT-3)
+│   │   └── announce.rs           # ✅
 │   ├── dto/
 │   │   ├── register.rs           # ✅
-│   │   └── birthday.rs           # ✅
+│   │   ├── birthday.rs           # ✅
+│   │   └── announce.rs           # ✅
 │   ├── routes/
 │   │   ├── mod.rs                # ✅
 │   │   ├── register.rs           # ✅
-│   │   └── birthday.rs           # ✅
+│   │   ├── birthday.rs           # ✅
+│   │   └── announce.rs           # ✅
 │   └── error.rs                  # ✅
 ├── Dockerfile                    # ✅
 ├── .dockerignore                 # ✅
@@ -113,6 +118,51 @@ CREATE INDEX idx_reg_applicant ON registrations(applicant_id);
 CREATE INDEX idx_reg_finished ON registrations(finished);
 ```
 
+### meeting
+
+```sql
+CREATE TABLE meeting (
+    id       BIGSERIAL PRIMARY KEY,
+    name     VARCHAR(200) NOT NULL DEFAULT '',
+    snowflake VARCHAR(50) NOT NULL UNIQUE,
+    state    VARCHAR(2) NOT NULL,
+    active   BOOLEAN NOT NULL DEFAULT true
+);
+
+CREATE INDEX idx_meeting_state_active ON meeting(state, active);
+CREATE INDEX idx_meeting_active ON meeting(active);
+```
+
+### DTOs — Meeting
+
+#### CreateMeetingDto
+
+```rust
+#[derive(Debug, Deserialize, Validate)]
+pub struct CreateMeetingDto {
+    #[validate(length(max = 200))]
+    pub name: Option<String>,
+    #[validate(length(min = 1, max = 50))]
+    pub snowflake: String,
+    #[validate(length(equal = 2))]
+    pub state: String,
+}
+```
+
+#### UpdateMeetingDto
+
+```rust
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateMeetingDto {
+    #[validate(length(max = 200))]
+    pub name: Option<String>,
+    #[validate(length(min = 1, max = 50))]
+    pub snowflake: String,
+    #[validate(length(equal = 2))]
+    pub state: String,
+}
+```
+
 ### birthdays
 
 ```sql
@@ -124,6 +174,73 @@ CREATE TABLE birthdays (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
+
+### announcements
+
+```sql
+CREATE TABLE announcements (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    channel_id TEXT         NOT NULL,
+    message    TEXT         NOT NULL,
+    frequency  VARCHAR(50)  NOT NULL DEFAULT 'daily',
+    last_posted TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_announcements_channel_id ON announcements(channel_id);
+CREATE INDEX idx_announcements_last_posted ON announcements(last_posted);
+```
+
+### DTOs — Announcement
+
+#### CreateAnnouncementDto
+
+```rust
+#[derive(Debug, Deserialize, Validate)]
+pub struct CreateAnnouncementDto {
+    #[validate(length(min = 1, max = 255))]
+    pub channel_id: String,
+    #[validate(length(max = 10000))]
+    pub message: String,
+    #[validate(length(max = 50))]
+    pub frequency: Option<String>,
+}
+```
+
+#### UpdateAnnouncementDto
+
+```rust
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateAnnouncementDto {
+    #[validate(length(min = 1, max = 255))]
+    pub channel_id: Option<String>,
+    #[validate(length(max = 10000))]
+    pub message: Option<String>,
+    #[validate(length(max = 50))]
+    pub frequency: Option<String>,
+}
+```
+
+### Announcements
+
+| Method | Route | DTO In | DTO Out | Status |
+|---|---|---|---|---|
+| GET | `/announce?page=0&size=100` | — | AnnouncementResponse [] | 200 |
+| GET | `/announce/{id}` | — | AnnouncementResponse | 200/404 |
+| POST | `/announce` | CreateAnnouncementDto | AnnouncementResponse | 201/400 |
+| PATCH | `/announce/{id}` | UpdateAnnouncementDto | AnnouncementResponse | 200/400/404 |
+| DELETE | `/announce/{id}` | — | — | 204/404 |
+
+#### Regras
+
+1. `POST /announce` — valida DTO campos obrigatórios. `frequency` padrão = "daily".
+2. `GET /announce` — lista todas as announcements com paginação. Default size=100.
+3. `GET /announce/{id}` — busca por UUID, retorna 404 se não encontrado.
+4. `PATCH /announce/{id}` — partial update (todos os campos opcionais). Atualiza `updated_at`.
+5. `DELETE /announce/{id}` — hard delete por UUID. 404 se não existe.
+6. UUID inválido → 400.
+7. `message` max 10000 chars, `channel_id` max 255 chars, `frequency` max 50 chars.
 
 ⸻
 
@@ -169,6 +286,26 @@ pub struct BirthdayRequestDto {
 
 ## Endpoints
 
+### /meeting
+
+| Method | Route | DTO In | DTO Out | Status |
+|---|---|---|---|---|
+| GET | `/meeting?page=0&size=25` | — | MeetingResponse [] | 200 |
+| GET | `/meeting/{snowflake}` | — | MeetingResponse | 200/404 |
+| GET | `/meeting/state/{state}?page=0&size=25` | — | MeetingResponse [] | 200 |
+| POST | `/meeting` | CreateMeetingDto | MeetingResponse | 201/400/409 |
+| PUT | `/meeting` | UpdateMeetingDto | MeetingResponse | 200/400/404 |
+| DELETE | `/meeting/{id}` | — | — | 204/404 |
+
+#### Regras
+
+1. `GET /meeting` — lista apenas reuniões ativas (`active = true`), paginação com default size=25
+2. `GET /meeting/{snowflake}` — busca por snowflake (string), retorna 404 se não encontrado
+3. `GET /meeting/state/{state}` — filtra por estado + ativo, paginação
+4. `POST /meeting` — valida snowflake (1-50 chars) e state (exatamente 2 chars), unique constraint → 409
+5. `PUT /meeting` — partial update (name opcional), reativa meeting (active=true), 404 se snowflake não existe
+6. `DELETE /meeting/{id}` — soft delete via ID numérico, seta active=false
+
 ### /registration
 
 | Method | Route | DTO In | DTO Out | Status |
@@ -176,15 +313,52 @@ pub struct BirthdayRequestDto {
 | POST | `/registration` | CreateRegisterDto | Register | 201 |
 | GET | `/registration/open/{applicant_id}` | — | Register | 200/404 |
 | GET | `/registration/{id}` | — | Register | 200/404 |
-| PATCH | `/registration/{id}/finish` | UpdateRegisterDto | Register | 202 |
+| PATCH | `/registration/{id}` | UpdateRegisterDto | Register | 202 |
 | DELETE | `/registration/{id}` | — | — | 204 |
 
 #### Regras
 
 1. `POST` — verifica registro aberto por `applicant_id`. Se existe → 400.
-2. `PATCH` — busca registro aberto do applicant, seta `finished=true`, `curator_id`, `approved`.
+2. `PATCH /registration/{id}` — body contains `finished`, `curator_id`, `approved`. Searches for open registration by `applicant_id`, sets `finished=true`, `curator_id`, `approved`.
 3. UUID inválido → 400.
 4. `DELETE` — remove por UUID. Se não existe → 404.
+
+⸻
+
+## Notas — Sessão de Grilling (2026-07-16)
+
+### Decisões de Arquitetura Validadas
+
+| Decisão | Escolha | Motivo |
+|---|---|---|
+| HTTP Framework | Axum | Clean async ergonomics, tower integration, active maintenance |
+| Database ORM | SQLx | Compile-time checked queries, no abstraction tax |
+| Registrations IDs | UUID v7 | Sortable by creation time, avoids sequential collisions |
+| Meetings IDs | BIGSERIAL | Paginated queries, no distributed ID need |
+| Birthdays IDs | Snowflake | Discord compatibility (carry-over) |
+| Validation | validator crate | Declarative, close to DTO definitions |
+| Error Handling | thiserror + anyhow + AppError | Standard Rust web stack, predictable HTTP responses |
+| Logging | tracing + tracing-subscriber | Structured logs, runtime-filterable |
+| Config | std::env::var() | Single value (DATABASE_URL), minimal and explicit |
+| Dates/Time | chrono | Battle-tested, good timezone support (GMT-3) |
+| Migrations | SQL files + sqlx migrate | Simple, version-controlled, compile-time validated |
+| Docker | cargo-chef multi-stage | CI/CD cache optimization |
+| Config Mgmt | std::env | Single config value, no need for config crate |
+| Pagination | Offset-based | Fine for current dataset sizes (<10k records) |
+
+### Alterações Planejadas
+
+1. **Endpoint simplificado**: `PATCH /registration/{id}` replaces `PATCH /registration/{id}/finish`. Body includes `finished: true`, `curator_id`, `approved`. Cleaner REST semantics, fewer endpoints.
+2. **Meeting soft delete**: `active BOOLEAN` retained for historical records. Plan to purge old inactive meetings in data retention strategy.
+3. **Future consideration**: Evaluate cursor-based pagination if tables exceed 10k records. Evaluate Liquibase if migration complexity increases.
+
+### Stack Justification Summary
+
+- **No regret on Axum** — default for new Rust web projects, best async story
+- **No pushback on SQLx** — raw SQL with compile-time safety, no ORM overhead
+- **Validator crate** — declarative rules, no cross-field validation needed
+- **Chrono** — timezone support (GMT-3) working, no performance concerns
+- **Tracing** — structured logging essential for production debugging
 
 ⸻
 
@@ -232,6 +406,28 @@ find_month() -> Vec<Birthday>
 create(dto: &BirthdayRequestDto) -> Birthday
 update(snowflake: &str, dto: &BirthdayRequestDto) -> Birthday
 delete(snowflake: &str) -> bool
+```
+
+### Meeting
+
+```
+list_active(page: i64, size: i64) -> Vec<MeetingResponse>
+find_by_snowflake(snowflake: &str) -> Option<Meeting>
+find_by_snowflake_response(snowflake: &str) -> Option<MeetingResponse>
+list_by_state(state: &str, page: i64, size: i64) -> Vec<MeetingResponse>
+create(name: &str, snowflake: &str, state: &str) -> Meeting
+update(name: &str, state: &str, snowflake: &str) -> MeetingResponse
+soft_delete(id: i64) -> u64 (rows affected)
+```
+
+### Announcement
+
+```
+list_paginated(page: i64, size: i64) -> Vec<AnnouncementResponse>
+find_by_id(id: Uuid) -> Option<Announcement>
+create(channel_id: &str, message: &str, frequency: &str) -> Announcement
+update(id: Uuid, channel_id: Option<&str>, message: Option<&str>, frequency: Option<&str>) -> Announcement
+delete(id: Uuid) -> u64 (rows affected)
 ```
 
 ⸻
@@ -310,4 +506,33 @@ docker buildx build --platform linux/arm64,linux/amd64 -t fbrustapi:latest .
 14. [x] Wire up routes in `main.rs` (extend router)
 15. [x] `Dockerfile` + `.dockerignore`
 16. [x] Build docker multi-arch
-17. [ ] Integration tests
+17. [x] Integration tests
+18. [x] `migrations/0003_create_meeting.sql` — meeting table + indexes
+19. [x] `src/models/meeting.rs` — Meeting struct + 6 query methods
+20. [x] `src/dto/meeting.rs` — CreateMeetingDto, UpdateMeetingDto (with validator)
+21. [x] `src/routes/meeting.rs` — 6 route handlers + route registration
+22. [x] Wire up `/meeting` routes in `main.rs`
+23. [x] Unit tests for meeting DTOs (dto_tests.rs)
+24. [x] Integration tests for meeting endpoint (15 tests covering all routes)
+25. [x] `migrations/0004_create_announcements.sql` — announcements table + indexes
+26. [x] `src/models/announce.rs` — Announcement struct + query methods
+27. [x] `src/dto/announce.rs` — CreateAnnouncementDto, UpdateAnnouncementDto
+28. [x] `src/routes/announce.rs` — route handlers + route registration
+29. [x] Wire up `/announce` routes in `main.rs`
+30. [x] Unit tests for announcement DTOs
+31. [x] Integration tests for announce endpoint
+
+⸻
+
+## Próximos Passos (pós-grilling)
+
+1. [ ] `src/routes/register.rs` — update PATCH handler: `/registration/{id}` instead of `/registration/{id}/finish`
+2. [ ] `src/routes/register.rs` — update handler to accept `finished` field in UpdateRegisterDto
+3. [ ] `tests/` — update integration tests for new registration PATCH endpoint path
+4. [ ] `src/models/register.rs` — verify query method accepts `finished` flag in update
+5. [ ] Data retention strategy — schedule job to purge inactive meetings older than X days
+6. [ ] Consider Liquibase migration (long-term, if schema complexity grows)
+7. [ ] Monitor pagination performance — switch to cursor-based if tables exceed 10k records
+8. [ ] Add frequency-based filtering endpoint: `GET /announce/channel/{channel_id}?page=0&size=100`
+9. [ ] Add actuator endpoints (`/actuator/info`, `/actuator/app`) for service metadata
+10. [ ] Docker multi-stage build for announce service (if separate container)
