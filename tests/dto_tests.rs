@@ -7,7 +7,7 @@ use validator::Validate;
 #[test]
 fn test_create_register_dto_valid() {
     let dto = CreateRegisterDto {
-        applicant_id: "123".to_string(),
+        applicant_id: Some("123".to_string()),
         birthday: Some("2000-01-01".to_string()),
         specie: Some("Human".to_string()),
         source: Some("Discord".to_string()),
@@ -19,7 +19,7 @@ fn test_create_register_dto_valid() {
 #[test]
 fn test_create_register_dto_invalid_empty_fields() {
     let dto = CreateRegisterDto {
-        applicant_id: "".to_string(), // Invalid: empty
+        applicant_id: Some("".to_string()), // Invalid: empty
         birthday: Some("2000-01-01".to_string()),
         specie: Some("".to_string()), // Invalid: empty
         source: Some("Discord".to_string()),
@@ -180,8 +180,8 @@ fn test_update_meeting_dto_invalid_state() {
 #[test]
 fn test_create_announcement_dto_valid() {
     let dto = CreateAnnouncementDto {
-        channel_id: "1234567890".to_string(),
-        message: "Hello Discord!".to_string(),
+        channel_id: Some("1234567890".to_string()),
+        message: Some("Hello Discord!".to_string()),
         frequency: Some("daily".to_string()),
     };
     assert!(dto.validate().is_ok());
@@ -190,8 +190,8 @@ fn test_create_announcement_dto_valid() {
 #[test]
 fn test_create_announcement_dto_valid_no_frequency() {
     let dto = CreateAnnouncementDto {
-        channel_id: "1234567890".to_string(),
-        message: "Hello Discord!".to_string(),
+        channel_id: Some("1234567890".to_string()),
+        message: Some("Hello Discord!".to_string()),
         frequency: None,
     };
     assert!(dto.validate().is_ok());
@@ -200,8 +200,8 @@ fn test_create_announcement_dto_valid_no_frequency() {
 #[test]
 fn test_create_announcement_dto_invalid_empty_channel_id() {
     let dto = CreateAnnouncementDto {
-        channel_id: "".to_string(),
-        message: "Hello Discord!".to_string(),
+        channel_id: Some("".to_string()),
+        message: Some("Hello Discord!".to_string()),
         frequency: Some("daily".to_string()),
     };
     let res = dto.validate();
@@ -214,8 +214,8 @@ fn test_create_announcement_dto_invalid_empty_channel_id() {
 #[test]
 fn test_create_announcement_dto_valid_long_message() {
     let dto = CreateAnnouncementDto {
-        channel_id: "1234567890".to_string(),
-        message: "a".repeat(10000),
+        channel_id: Some("1234567890".to_string()),
+        message: Some("a".repeat(10000)),
         frequency: Some("daily".to_string()),
     };
     assert!(dto.validate().is_ok());
@@ -224,8 +224,8 @@ fn test_create_announcement_dto_valid_long_message() {
 #[test]
 fn test_create_announcement_dto_exceeds_message_length() {
     let dto = CreateAnnouncementDto {
-        channel_id: "1234567890".to_string(),
-        message: "a".repeat(10001),
+        channel_id: Some("1234567890".to_string()),
+        message: Some("a".repeat(10001)),
         frequency: Some("daily".to_string()),
     };
     let res = dto.validate();

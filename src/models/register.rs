@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use sqlx::types::Uuid;
 
 use crate::db::PgPool;
 use crate::dto::register::{CreateRegisterDto, UpdateRegisterDto};
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Register {
-    pub id: String,
+    pub id: Uuid,
     #[sqlx(rename = "applicantid")]
     pub applicant_id: String,
     #[sqlx(rename = "curatorid")]
@@ -49,10 +50,11 @@ async fn query_find_unfinished(pool: &PgPool, applicant_id: &str) -> sqlx::Resul
 }
 
 async fn query_find_by_id(pool: &PgPool, id: &str) -> sqlx::Result<Option<Register>> {
+    let uuid = Uuid::parse_str(id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
     sqlx::query_as::<_, Register>(
         r#"SELECT * FROM registrations WHERE id = $1"#,
     )
-    .bind(id)
+    .bind(uuid)
     .fetch_optional(pool)
     .await
 }
@@ -72,10 +74,11 @@ async fn query_finish(pool: &PgPool, applicant_id: &str, dto: &UpdateRegisterDto
 }
 
 async fn query_delete_by_id(pool: &PgPool, id: &str) -> sqlx::Result<bool> {
+    let uuid = Uuid::parse_str(id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
     let result = sqlx::query(
         r#"DELETE FROM registrations WHERE id = $1"#,
     )
-    .bind(id)
+    .bind(uuid)
     .execute(pool)
     .await?;
     Ok(result.rows_affected() > 0)

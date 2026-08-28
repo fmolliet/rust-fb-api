@@ -1,54 +1,57 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use sqlx::types::Uuid;
 
 use crate::db::PgPool;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Announcement {
-    pub id: String,
+    pub id: Uuid,
     pub channel_id: String,
     pub message: String,
     pub frequency: String,
-    pub last_posted: NaiveDateTime,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub last_posted: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct AnnouncementResponse {
-    pub id: String,
+    pub id: Uuid,
     pub channel_id: String,
     pub message: String,
     pub frequency: String,
-    pub last_posted: NaiveDateTime,
+    pub last_posted: DateTime<Utc>,
 }
 
 async fn query_list(pool: &PgPool, page: i64, size: i64) -> sqlx::Result<Vec<AnnouncementResponse>> {
+    let offset = page * size;
     let rows = sqlx::query_as::<_, Announcement>(
         r#"SELECT id, channel_id, message, frequency, last_posted, created_at, updated_at
            FROM announcements
            ORDER BY created_at DESC LIMIT $1 OFFSET $2"#,
     )
     .bind(size)
-    .bind(page * size)
+    .bind(offset)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(Announcement::to_response).collect())
 }
 
 async fn query_find_by_id(pool: &PgPool, id: &str) -> sqlx::Result<Option<Announcement>> {
+    let uuid = Uuid::parse_str(id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
     sqlx::query_as::<_, Announcement>(
         r#"SELECT id, channel_id, message, frequency, last_posted, created_at, updated_at
            FROM announcements WHERE id = $1"#,
     )
-    .bind(id)
+    .bind(uuid)
     .fetch_optional(pool)
     .await
 }
 
 async fn query_create(pool: &PgPool, channel_id: &str, message: &str, frequency: &str) -> sqlx::Result<Announcement> {
-    let now = Utc::now().naive_utc();
+    let now = Utc::now();
     sqlx::query_as::<_, Announcement>(
         r#"INSERT INTO announcements (channel_id, message, frequency, last_posted, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6)
@@ -65,6 +68,7 @@ async fn query_create(pool: &PgPool, channel_id: &str, message: &str, frequency:
 }
 
 async fn query_update(pool: &PgPool, id: &str, channel_id: Option<&str>, message: Option<&str>, frequency: Option<&str>) -> sqlx::Result<Option<AnnouncementResponse>> {
+    let uuid = Uuid::parse_str(id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
     let existing = query_find_by_id(pool, id).await?;
     let existing = match existing {
         Some(e) => e,
@@ -74,7 +78,7 @@ async fn query_update(pool: &PgPool, id: &str, channel_id: Option<&str>, message
     let ch = channel_id.unwrap_or(&existing.channel_id);
     let msg = message.unwrap_or(&existing.message);
     let freq = frequency.unwrap_or(&existing.frequency);
-    let now = Utc::now().naive_utc();
+    let now = Utc::now();
 
     let announcement = sqlx::query_as::<_, Announcement>(
         r#"UPDATE announcements
@@ -86,17 +90,18 @@ async fn query_update(pool: &PgPool, id: &str, channel_id: Option<&str>, message
     .bind(msg)
     .bind(freq)
     .bind(now)
-    .bind(id)
+    .bind(uuid)
     .fetch_optional(pool)
     .await?;
     Ok(announcement.map(|a| a.to_response()))
 }
 
 async fn query_delete(pool: &PgPool, id: &str) -> sqlx::Result<u64> {
+    let uuid = Uuid::parse_str(id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
     let result = sqlx::query(
         r#"DELETE FROM announcements WHERE id = $1"#,
     )
-    .bind(id)
+    .bind(uuid)
     .execute(pool)
     .await?;
     Ok(result.rows_affected())
@@ -105,7 +110,7 @@ async fn query_delete(pool: &PgPool, id: &str) -> sqlx::Result<u64> {
 impl Announcement {
     pub fn to_response(self) -> AnnouncementResponse {
         AnnouncementResponse {
-            id: self.id.clone(),
+            id: self.id,
             channel_id: self.channel_id.clone(),
             message: self.message.clone(),
             frequency: self.frequency.clone(),

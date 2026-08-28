@@ -4,7 +4,7 @@ use validator::Validate;
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateRegisterDto {
     #[validate(length(min = 1))]
-    pub applicant_id: String,
+    pub applicant_id: Option<String>,
     pub birthday: Option<String>,
     #[validate(length(min = 1))]
     pub specie: Option<String>,

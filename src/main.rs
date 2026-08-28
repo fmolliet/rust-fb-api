@@ -1,13 +1,14 @@
-use fbrustapi::{config, db, routes};
-use axum::{routing::get, Router};
+use fbrustapi::{config, db, routes, middleware};
+use axum::{routing::get, Router, middleware::from_fn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env()
+        .with(EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| "fbrustapi=debug,sqlx_core=warn".into()))
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().json())
         .init();
 
     let config = config::Config::from_env();
@@ -26,6 +27,7 @@ async fn main() {
         .nest("/birthday", routes::birthday::birthday_routes())
         .nest("/meeting", routes::meeting::meeting_routes())
         .nest("/announce", routes::announce::announce_routes())
+        .layer(from_fn(middleware::correlation_id_middleware))
         .with_state(state);
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8081".to_string());

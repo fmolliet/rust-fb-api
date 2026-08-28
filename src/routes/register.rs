@@ -2,17 +2,12 @@ use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{extract::State, Json};
+use sqlx::types::Uuid;
 
 use crate::db::AppState;
 use crate::dto::register::{CreateRegisterDto, UpdateRegisterDto};
 use crate::error::AppError;
 use crate::models::register::Register;
-
-fn parse_uuid_id(id: &str) -> Result<String, AppError> {
-    uuid::Uuid::parse_str(id).map(|_| id.to_string()).map_err(|_| {
-        AppError::BadRequest(format!("Invalid UUID format: {}", id))
-    })
-}
 
 pub fn register_routes() -> axum::Router<AppState> {
     axum::Router::new()
@@ -27,7 +22,11 @@ async fn create_register(
     State(state): State<AppState>,
     Json(dto): Json<CreateRegisterDto>,
 ) -> Result<impl IntoResponse, AppError> {
-    let existing = Register::find_unfinished_by_applicant_id(&state.pool, &dto.applicant_id)
+    let applicant_id = dto.applicant_id.clone().ok_or_else(|| {
+        AppError::BadRequest("applicant_id is required".to_string())
+    })?;
+
+    let existing = Register::find_unfinished_by_applicant_id(&state.pool, &applicant_id)
         .await
         .map_err(|e| {
             tracing::error!("DB error checking unfinished registration: {}", e);
@@ -73,11 +72,9 @@ async fn get_open_registration(
 
 async fn get_registration(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    let id = parse_uuid_id(&id)?;
-
-    let reg = Register::find_by_id(&state.pool, &id)
+    let reg = Register::find_by_id(&state.pool, &id.to_string())
         .await
         .map_err(|e| {
             tracing::error!("DB error finding registration: {}", e);
@@ -117,11 +114,9 @@ async fn finish_registration(
 
 async fn delete_registration(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    let id = parse_uuid_id(&id)?;
-
-    let deleted = Register::delete_by_id(&state.pool, &id)
+    let deleted = Register::delete_by_id(&state.pool, &id.to_string())
         .await
         .map_err(|e| {
             tracing::error!("DB error deleting registration: {}", e);

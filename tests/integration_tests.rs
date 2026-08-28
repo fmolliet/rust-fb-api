@@ -1,6 +1,6 @@
 use axum::{Router, body::Body, http::Request};
 use axum::http::StatusCode;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use tokio;
 use tokio::sync::Mutex;
 use tracing_subscriber;
@@ -12,11 +12,11 @@ use uuid::Uuid;
 static TEST_MUTEX: Mutex<()> = Mutex::const_new(());
 
 fn setup_tracing() {
-    tracing_subscriber::registry()
+    let _ = tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| "fbrustapi=debug,sqlx=debug,tower_http=debug".into()))
         .with(tracing_subscriber::fmt::layer())
-        .init();
+        .try_init();
 }
 
 use fbrustapi::db::AppState;
@@ -973,7 +973,8 @@ mod announce {
         .unwrap();
 
         // Query back to get the UUID
-        let id: String = sqlx::query_scalar::<_, String>(
+        use sqlx::types::Uuid;
+        let id = sqlx::query_scalar::<_, Uuid>(
             r#"SELECT id FROM announcements LIMIT 1"#
         )
         .fetch_one(&pool)
@@ -1743,21 +1744,22 @@ mod meeting {
         seed_schema(&pool).await;
         truncate_tables(&pool).await;
 
-        sqlx::query(
-            r#"INSERT INTO meeting (snowflake, name, state, active) VALUES ($1, $2, $3, true)"#
+        let meeting_id: i64 = sqlx::query(
+            r#"INSERT INTO meeting (snowflake, name, state, active) VALUES ($1, $2, $3, true) RETURNING id"#
         )
         .bind("delete-meeting")
         .bind("Delete Me")
         .bind("SP")
-        .execute(&pool)
+        .fetch_one(&pool)
         .await
+        .map(|r| r.get::<i64, _>(0))
         .unwrap();
 
         let app = create_app(pool);
 
         let req = Request::builder()
             .method("DELETE")
-            .uri("/meeting/1")
+            .uri(format!("/meeting/{}", meeting_id))
             .body(Body::empty())
             .unwrap();
 
@@ -1799,19 +1801,20 @@ mod meeting {
         seed_schema(&pool).await;
         truncate_tables(&pool).await;
 
-        sqlx::query(
-            r#"INSERT INTO meeting (snowflake, name, state, active) VALUES ($1, $2, $3, true)"#
+        let meeting_id: i64 = sqlx::query(
+            r#"INSERT INTO meeting (snowflake, name, state, active) VALUES ($1, $2, $3, true) RETURNING id"#
         )
         .bind("soft-delete-meeting")
         .bind("Soft Delete Me")
         .bind("SP")
-        .execute(&pool)
+        .fetch_one(&pool)
         .await
+        .map(|r| r.get::<i64, _>(0))
         .unwrap();
 
         let req = Request::builder()
             .method("DELETE")
-            .uri("/meeting/1")
+            .uri(format!("/meeting/{}", meeting_id))
             .body(Body::empty())
             .unwrap();
 

@@ -2,7 +2,7 @@
 type: Index
 title: fbrustapi Knowledge Base
 description: Central reference for the Rust REST API microservice project.
-timestamp: 2026-07-02T00:00:00Z
+timestamp: 2026-08-27T00:00:00Z
 ---
 
 # fbrustapi
@@ -15,4 +15,4 @@ timestamp: 2026-07-02T00:00:00Z
 - [birthdays](birthdays.md) — birthday records with Discord snowflake IDs
 
 ## APIs
-- [REST API endpoints](api.md) — /registration and /birthday CRUD endpoints
+- [REST API endpoints](api.md) — /registration, /birthday, /meeting, /announce, /health endpoints

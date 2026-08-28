@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Configuration variables
 DB_CONTAINER_NAME="fbrustapi-db"
 DB_PORT=5432
@@ -8,30 +7,67 @@ DB_PASSWORD="postgres"
 DB_NAME="fbrustapi"
 APP_PORT="${PORT:-8081}"
 DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}"
-
 # Color codes for pretty printing
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0;0m' # No Color
-
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
-
 log_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
-
 log_warn() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
-
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
-
+# --- BUILD LOGIC ---
+IMAGE_NAME="fbrustapi"
+CARGO_TOML="Cargo.toml"
+run_build() {
+    local PLATFORM=""
+    local VERSION_PARAM=""
+    while [[ "$#" -gt 0 ]]; do
+        case $1 in
+            --platform) PLATFORM="$2"; shift ;;
+            --version) VERSION_PARAM="$2"; shift ;;
+            *) log_error "Unknown parameter: $1"; exit 1 ;;
+        esac
+        shift
+    done
+    # Handle Versioning
+    CURRENT_VERSION=$(grep '^version =' "$CARGO_TOML" | sed 's/version = "\(.*\)"/\1/')
+    NEW_VERSION=$(echo "$CURRENT_VERSION" | awk -F. '{$NF = $NF + 1;} 1' OFS=.)
+    if [ -n "$VERSION_PARAM" ]; then
+        log_info "Overwriting Cargo.toml with version: $VERSION_PARAM"
+        sed -i '' "s/^version = \".*\"/version = \"$VERSION_PARAM\"/" "$CARGO_TOML"
+        FINAL_VERSION="$VERSION_PARAM"
+    else
+        log_info "Bumping patch version: $CURRENT_VERSION -> $NEW_VERSION"
+        sed -i '' "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "$CARGO_TOML"
+        FINAL_VERSION="$NEW_VERSION"
+    fi
+    # Build Docker Image
+    DOCKER_CMD="docker build"
+    [ -n "$PLATFORM" ] && DOCKER_CMD="$DOCKER_CMD --platform $PLATFORM"
+    log_info "Building image: $IMAGE_NAME:$FINAL_VERSION"
+    $DOCKER_CMD -t "$IMAGE_NAME:$FINAL_VERSION" .
+    if [ $? -ne 0 ]; then
+        log_error "Docker build failed."
+        exit 1
+    fi
+    # Tag and Push
+    log_info "Tagging and pushing..."
+    docker tag "$IMAGE_NAME:$FINAL_VERSION" "$IMAGE_NAME:latest"
+    docker push "$IMAGE_NAME:$FINAL_VERSION"
+    docker push "$IMAGE_NAME:latest"
+    log_success "Build and push complete: $IMAGE_NAME:$FINAL_VERSION"
+}
+# -------------------
 # 1. Check/Start Docker daemon / Colima
 check_docker() {
     log_info "Checking Docker daemon status..."
@@ -64,7 +100,6 @@ check_docker() {
         log_success "Docker daemon is running."
     fi
 }
-
 # 2. Check/Start PostgreSQL Container
 setup_db() {
     check_docker
@@ -88,7 +123,6 @@ setup_db() {
             -e POSTGRES_DB="$DB_NAME" \
             postgres:latest > /dev/null
     fi
-
     # Wait for PostgreSQL to be ready
     log_info "Waiting for PostgreSQL to accept connections..."
     local max_attempts=30
@@ -101,11 +135,9 @@ setup_db() {
         sleep 1
         attempt=$((attempt + 1))
     done
-
     log_error "Timeout waiting for PostgreSQL to start."
     exit 1
 }
-
 # 3. Apply SQL migrations
 run_migrations() {
     log_info "Running migrations from migrations/ directory..."
@@ -113,7 +145,6 @@ run_migrations() {
         log_error "migrations/ directory not found!"
         exit 1
     fi
-
     # We read each sql file in sorted order and pipe it directly to psql in the container
     for file in $(find migrations -name "*.sql" | sort); do
         log_info "Applying migration: $(basename "$file")"
@@ -125,7 +156,6 @@ run_migrations() {
     done
     log_success "Migration process completed."
 }
-
 # 4. Clean up / Reset database schema
 reset_db() {
     log_info "Resetting database schema..."
@@ -136,7 +166,6 @@ reset_db() {
         log_warn "PostgreSQL container is not running. Cannot reset DB schema."
     fi
 }
-
 # 5. Clean up container entirely
 clean_container() {
     log_info "Cleaning up PostgreSQL container '${DB_CONTAINER_NAME}'..."
@@ -144,7 +173,6 @@ clean_container() {
     docker rm "$DB_CONTAINER_NAME" >/dev/null 2>&1 || true
     log_success "PostgreSQL container removed."
 }
-
 # 6. Run Dev environment
 run_dev() {
     setup_db
@@ -154,12 +182,10 @@ run_dev() {
     export DATABASE_URL="$DATABASE_URL"
     cargo run
 }
-
 # 7. Run Test suite
 run_tests() {
     setup_db
     run_migrations
-
     log_info "Running Rust unit and integration tests..."
     export DATABASE_URL
     if ! cargo test; then
@@ -167,7 +193,6 @@ run_tests() {
         exit 1
     fi
     log_success "All Rust unit/integration tests passed."
-
     log_info "Building fbrustapi..."
     cargo build
     
@@ -179,7 +204,6 @@ run_tests() {
     
     # Ensure background process is killed on exit
     trap 'log_info "Stopping application (PID $app_pid)..."; kill $app_pid 2>/dev/null; wait $app_pid 2>/dev/null; log_success "Application stopped."' EXIT INT TERM
-
     # Wait for server to respond
     log_info "Waiting for application to start on port $APP_PORT..."
     local max_attempts=15
@@ -195,17 +219,27 @@ run_tests() {
         sleep 1
         attempt=$((attempt + 1))
     done
-
     if [ "$server_ready" = "false" ]; then
         log_error "Application failed to start or respond to health check."
         log_error "Logs from execution:"
         cat target/fbrustapi_test.log
         exit 1
     fi
-
     log_success "Application is online!"
     
-    # Run tests
+    # Run k6 load tests
+    if [ -f "tests/k6/load_test.js" ]; then
+        log_info "Running k6 load tests..."
+        if k6 run tests/k6/load_test.js; then
+            log_success "k6 load tests passed!"
+        else
+            log_error "k6 load tests failed!"
+            exit 1
+        fi
+    else
+        log_warn "k6 test script not found at tests/k6/load_test.js. Skipping."
+    fi
+    # Run local health check integration test
     log_info "Running local health check integration test..."
     local health_code
     health_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${APP_PORT}/health)
@@ -216,23 +250,20 @@ run_tests() {
         log_error "TEST FAILED: GET /health returned HTTP $health_code"
         exit 1
     fi
-
-    # Additional endpoints could be tested here as they get implemented
     log_success "All local tests completed successfully!"
 }
-
 # Help / Usage instruction
 print_usage() {
-    echo "Usage: $0 {dev|test|clean|reset|help}"
+    echo "Usage: $0 {dev|test|clean|reset|build|help}"
     echo
     echo "Commands:"
     echo "  dev      - Starts PostgreSQL (using Docker/Colima), runs migrations, and starts the API in foreground."
     echo "  test     - Starts PostgreSQL, runs migrations, starts the API in background, runs health verification tests, and stops."
     echo "  clean    - Stops and removes the local PostgreSQL Docker container."
     echo "  reset    - Resets the database schema (drops and recreates the public schema) and reapplies migrations."
+    echo "  build    - Builds, tags, and pushes Docker image (supports --platform and --version)."
     echo "  help     - Shows this help message."
 }
-
 # Command dispatching
 case "$1" in
     dev)
@@ -248,6 +279,10 @@ case "$1" in
         setup_db
         reset_db
         run_migrations
+        ;;
+    build)
+        shift
+        run_build "$@"
         ;;
     help|*)
         print_usage

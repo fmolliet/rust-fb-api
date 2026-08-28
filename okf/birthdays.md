@@ -4,18 +4,19 @@ title: Birthdays
 description: One row per birthday record with Discord snowflake ID.
 resource: migrations/0002_create_birthdays.sql
 tags: [birthdays, snowflake, discord]
-timestamp: 2026-07-02T00:00:00Z
+timestamp: 2026-08-27T00:00:00Z
 ---
 
 # Schema
 
 ```sql
 CREATE TABLE birthdays (
-    snowflake TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    day INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
-    month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    day INT4 NOT NULL,
+    month INT4 NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    snowflake VARCHAR(255) NOT NULL,
+    CONSTRAINT birthdays_pk PRIMARY KEY (snowflake),
+    UNIQUE INDEX snowflake_un (snowflake)
 );
 ```
 
@@ -25,18 +26,15 @@ CREATE TABLE birthdays (
 pub struct Birthday {
     pub snowflake: String,
     pub name: String,
-    pub day: u8,
-    pub month: u8,
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub day: i32,
+    pub month: i32,
 }
-```
 
-```rust
 pub struct BirthdayResponse {
     pub snowflake: String,
     pub name: String,
-    pub day: u8,
-    pub month: u8,
+    pub day: i32,
+    pub month: i32,
 }
 ```
 
@@ -50,8 +48,8 @@ pub struct BirthdayRequestDto {
     pub snowflake: String,
     #[validate(length(min = 1))]
     pub name: String,
-    pub day: u8,
-    pub month: u8,
+    pub day: i32,
+    pub month: i32,
 }
 ```
 
@@ -59,13 +57,13 @@ pub struct BirthdayRequestDto {
 
 | Method | Signature |
 |--------|-----------|
-| find_by_snowflake | `find_by_snowflake(snowflake: &str) -> Option<Birthday>` |
-| list_paginated | `list_paginated(page: i64, size: i64) -> Vec<Birthday>` |
-| find_today | `find_today() -> Vec<Birthday>` |
-| find_month | `find_month() -> Vec<Birthday>` |
-| create | `create(dto: &BirthdayRequestDto) -> Birthday` |
-| update | `update(snowflake: &str, dto: &BirthdayRequestDto) -> Birthday` |
-| delete | `delete(snowflake: &str) -> bool` |
+| create | `create(pool: &PgPool, dto: &BirthdayRequestDto) -> sqlx::Result<Birthday>` |
+| find_by_snowflake | `find_by_snowflake(pool: &PgPool, snowflake: &str) -> sqlx::Result<Option<Birthday>>` |
+| list_paginated | `list_paginated(pool: &PgPool, page: i64, size: i64) -> sqlx::Result<Vec<Birthday>>` |
+| find_today | `find_today(pool: &PgPool) -> sqlx::Result<Vec<BirthdayResponse>>` |
+| find_month | `find_month(pool: &PgPool) -> sqlx::Result<Vec<BirthdayResponse>>` |
+| update | `update(pool: &PgPool, snowflake: &str, dto: &BirthdayRequestDto) -> sqlx::Result<Birthday>` |
+| delete_by_snowflake | `delete_by_snowflake(pool: &PgPool, snowflake: &str) -> sqlx::Result<bool>` |
 
 # Timezone
 
@@ -73,7 +71,6 @@ All "today" and "month" queries use `GMT-3` timezone (`FixedOffset::west_opt(3 *
 
 # Notes
 
-- `snowflake` is Discord-style ID, stored as TEXT (not INT), used as PRIMARY KEY
-- `day` constrained 1-31, `month` constrained 1-12 via CHECK constraints
-- No `updated_at` column — only `created_at`
-- `snowflake` must be unique across all records (primary key)
+- `snowflake` is Discord-style ID, stored as VARCHAR(255), used as PRIMARY KEY
+- No `created_at` or `updated_at` columns — only `day`, `month`, `name`, `snowflake`
+- `snowflake` must be unique across all records (primary key + unique index)

@@ -3,18 +3,13 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{Json, debug_handler};
 use serde::Deserialize;
+use sqlx::types::Uuid;
 use validator::Validate;
 
 use crate::db::AppState;
 use crate::dto::announce::{CreateAnnouncementDto, UpdateAnnouncementDto};
 use crate::error::AppError;
 use crate::models::announce::Announcement;
-
-fn parse_uuid_id(id: &str) -> Result<String, AppError> {
-    uuid::Uuid::parse_str(id).map(|_| id.to_string()).map_err(|_| {
-        AppError::BadRequest("invalid announcement id format".into())
-    })
-}
 
 #[derive(Deserialize)]
 pub struct PaginationParams {
@@ -45,11 +40,9 @@ async fn list_announcements(
 #[debug_handler]
 async fn get_announcement(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    let id = parse_uuid_id(&id)?;
-
-    let announcement = Announcement::find_by_id_response(&state.pool, &id).await?;
+    let announcement = Announcement::find_by_id_response(&state.pool, &id.to_string()).await?;
 
     match announcement {
         Some(a) => Ok((StatusCode::OK, Json(a)).into_response()),
@@ -70,9 +63,11 @@ async fn create_announcement(
         AppError::BadRequest(format!("Validation failed: {}", details.join("; ")))
     })?;
 
+    let channel_id = dto.channel_id.unwrap_or_default();
+    let message = dto.message.unwrap_or_default();
     let frequency = dto.frequency.as_deref().unwrap_or("daily");
 
-    let announcement = Announcement::create(&state.pool, &dto.channel_id, &dto.message, frequency).await
+    let announcement = Announcement::create(&state.pool, &channel_id, &message, frequency).await
         .map_err(|e| {
             tracing::error!("DB error creating announcement: {}", e);
             AppError::Internal(e.into())
@@ -85,11 +80,9 @@ async fn create_announcement(
 #[debug_handler]
 async fn update_announcement(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(id): Path<Uuid>,
     Json(dto): Json<UpdateAnnouncementDto>,
 ) -> Result<impl IntoResponse, AppError> {
-    let id = parse_uuid_id(&id)?;
-
     dto.validate().map_err(|e| {
         let details: Vec<_> = e.field_errors()
             .iter()
@@ -102,7 +95,7 @@ async fn update_announcement(
     let message = dto.message.as_deref();
     let frequency = dto.frequency.as_deref();
 
-    let result = Announcement::update(&state.pool, &id, channel_id, message, frequency).await?;
+    let result = Announcement::update(&state.pool, &id.to_string(), channel_id, message, frequency).await?;
 
     match result {
         Some(a) => Ok((StatusCode::OK, Json(a)).into_response()),
@@ -113,11 +106,9 @@ async fn update_announcement(
 #[debug_handler]
 async fn delete_announcement(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    let id = parse_uuid_id(&id)?;
-
-    let affected = Announcement::delete(&state.pool, &id).await?;
+    let affected = Announcement::delete(&state.pool, &id.to_string()).await?;
 
     if affected == 0 {
         return Err(AppError::NotFound(format!("Announcement not found: {}", id)));

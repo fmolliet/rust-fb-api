@@ -4,64 +4,49 @@ title: Registrations
 description: One row per user registration/approval process in the fbrustapi system.
 resource: migrations/0001_create_registrations.sql
 tags: [registrations, users, approval]
-timestamp: 2026-07-02T00:00:00Z
+timestamp: 2026-08-27T00:00:00Z
 ---
 
 # Schema
 
 ```sql
 CREATE TABLE registrations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    applicant_id TEXT NOT NULL,
-    curator_id TEXT,
-    birthday TEXT,
-    specie TEXT,
-    source TEXT,
-    message_id TEXT,
-    finished BOOLEAN DEFAULT FALSE,
-    approved BOOLEAN,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    applicantid VARCHAR(255) NOT NULL,
+    curatorid VARCHAR(255) NULL,
+    finished BOOL NULL DEFAULT false,
+    messageid VARCHAR(255) NULL,
+    birthday VARCHAR(255) NULL,
+    specie VARCHAR(255) NULL,
+    source VARCHAR(255) NULL,
+    createdat TIMESTAMP NOT NULL DEFAULT current_timestamp,
+    updatedat TIMESTAMP NOT NULL DEFAULT current_timestamp,
+    approved BOOL NULL,
+    CONSTRAINT registrations_pkey PRIMARY KEY (id),
+    INDEX idx_applicantid (applicantid)
 );
 ```
-
-# Indexes
-
-| Index | Type | Column(s) | Condition |
-|-------|------|-----------|-----------|
-| uq_open_registration | UNIQUE | applicant_id | WHERE finished = FALSE |
-| idx_reg_applicant | BTREE | applicant_id | — |
-| idx_reg_finished | BTREE | finished | — |
 
 # Model (Rust: `src/models/register.rs`)
 
 ```rust
 pub struct Register {
     pub id: Uuid,
+    #[sqlx(rename = "applicantid")]
     pub applicant_id: String,
+    #[sqlx(rename = "curatorid")]
     pub curator_id: Option<String>,
-    pub birthday: Option<NaiveDate>,
-    pub specie: String,
-    pub source: String,
+    pub birthday: Option<String>,
+    pub specie: Option<String>,
+    pub source: Option<String>,
+    #[sqlx(rename = "messageid")]
     pub message_id: String,
-    pub finished: bool,
+    pub finished: Option<bool>,
     pub approved: Option<bool>,
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-```
-
-```rust
-pub struct RegisterResponse {
-    pub id: Uuid,
-    pub applicant_id: String,
-    pub curator_id: Option<String>,
-    pub birthday: Option<NaiveDate>,
-    pub specie: String,
-    pub source: String,
-    pub message_id: String,
-    pub finished: bool,
-    pub approved: Option<bool>,
+    #[sqlx(rename = "createdat")]
+    pub created_at: chrono::NaiveDateTime,
+    #[sqlx(rename = "updatedat")]
+    pub updated_at: chrono::NaiveDateTime,
 }
 ```
 
@@ -72,14 +57,14 @@ pub struct RegisterResponse {
 ```rust
 pub struct CreateRegisterDto {
     #[validate(length(min = 1))]
-    pub applicant_id: String,
-    pub birthday: chrono::NaiveDate,
+    pub applicant_id: Option<String>,
+    pub birthday: Option<String>,
     #[validate(length(min = 1))]
-    pub specie: String,
+    pub specie: Option<String>,
     #[validate(length(min = 1))]
-    pub source: String,
+    pub source: Option<String>,
     #[validate(length(min = 1))]
-    pub message_id: String,
+    pub message_id: Option<String>,
 }
 ```
 
@@ -89,6 +74,7 @@ pub struct CreateRegisterDto {
 pub struct UpdateRegisterDto {
     #[validate(length(min = 1))]
     pub applicant_id: String,
+    #[validate(length(min = 1))]
     pub curator_id: String,
     pub approved: bool,
 }
@@ -98,15 +84,15 @@ pub struct UpdateRegisterDto {
 
 | Method | Signature |
 |--------|-----------|
-| find_unfinished_by_applicant_id | `find_unfinished_by_applicant_id(applicant_id: &str) -> Option<Register>` |
-| find_by_id | `find_by_id(id: Uuid) -> Option<Register>` |
-| create | `create(dto: &CreateRegisterDto) -> Register` |
-| finish | `finish(applicant_id: &str, curator_id: &str, approved: bool) -> Register` |
-| delete | `delete(id: Uuid) -> bool` |
+| create | `create(pool: &PgPool, dto: &CreateRegisterDto) -> sqlx::Result<Register>` |
+| find_unfinished_by_applicant_id | `find_unfinished_by_applicant_id(pool: &PgPool, applicant_id: &str) -> sqlx::Result<Option<Register>>` |
+| find_by_id | `find_by_id(pool: &PgPool, id: &str) -> sqlx::Result<Option<Register>>` |
+| finish | `finish(pool: &PgPool, applicant_id: &str, dto: &UpdateRegisterDto) -> sqlx::Result<Register>` |
+| delete_by_id | `delete_by_id(pool: &PgPool, id: &str) -> sqlx::Result<bool>` |
 
 # Notes
 
-- `uq_open_registration` partial index protects against duplicate open registrations (concurrency guard)
 - `finished = FALSE` means an open/pending registration
 - `approved` is nullable — not yet decided vs explicitly approved/rejected
-- Timestamps stored as `TIMESTAMPTZ`, converted to UTC in Rust via `chrono::DateTime<Utc>`
+- Timestamps stored as `TIMESTAMP`, accessed via `chrono::NaiveDateTime`
+- Column names in DB use no underscore (`applicantid`, `curatorid`, etc.), mapped via `#[sqlx(rename = ...)]`
